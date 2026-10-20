@@ -1,66 +1,106 @@
-use color_print::cprintln;
-use dialoguer::{BasicHistory, Input};
+use eframe::egui;
 use std::cmp::Ordering;
-use std::process;
 
-fn main() {
-    println!("Guess the number!");
-    println!();
+#[cfg_attr(target_os = "android", no_mangle)]
+fn android_main(app: eframe::egui_winit::winit::platform::android::activity::AndroidApp) {
+    let mut options = eframe::NativeOptions::default();
+    options.android_app = Some(app);
+    let _ = eframe::run_native(
+        "Guessing Game",
+        options,
+        Box::new(|_cc| Ok(Box::new(GuessingGame::default()))),
+    );
+}
 
-    let secret_number: f64 = rand::random_range(1.0..=2.0);
+// Allows it to still compile on Windows if needed
+#[allow(dead_code)]
+fn main() {}
 
-    //println!("the secret number is: {secret_number}");
+struct GuessingGame {
+    secret_number: f64,
+    guess_input: String,
+    attempts: u32,
+    message: String,
+    message_color: egui::Color32,
+    history: Vec<String>,
+}
 
-    let mut history = BasicHistory::new().max_entries(8).no_duplicates(true);
-
-    let mut attempts = 0;
-
-    loop {
-        println!("attempt: #{attempts}");
-        println!("Please input your guess");
-
-        if let Ok(guess) = Input::<String>::new()
-            .history_with(&mut history)
-            .interact_text()
-        {
-            if guess == "exit" {
-                process::exit(0);
-            }
-            println!();
-            println!("-----------------");
-
-            //let mut guess = String::new();
-            //io::stdin()
-            //    .read_line(&mut guess)
-            //    .expect("Failed to read line");
-
-            let guess: f64 = match guess.trim().parse() {
-                Ok(num) => {
-                    attempts += 1;
-                    num
-                }
-                Err(_) => {
-                    cprintln!("<green>Thats not a number! type in a number.</>");
-                    println!("-----------------");
-                    continue;
-                }
-            };
-
-            match guess.total_cmp(&secret_number) {
-                Ordering::Less => {
-                    cprintln!("<red>Too small!</>");
-                    println!("-----------------")
-                }
-                Ordering::Greater => {
-                    cprintln!("<red>Too big!</>");
-                    println!("-----------------")
-                }
-                Ordering::Equal => {
-                    println!("You guessed correctly!");
-                    println!("number of attempts: {attempts} guesses");
-                    break;
-                }
-            }
+impl Default for GuessingGame {
+    fn default() -> Self {
+        Self {
+            secret_number: rand::random_range(1.0..=2.0),
+            guess_input: String::new(),
+            attempts: 0,
+            message: "Please input your guess (1.0 to 2.0)".to_owned(),
+            message_color: egui::Color32::WHITE,
+            history: Vec::new(),
         }
+    }
+}
+
+impl eframe::App for GuessingGame {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.heading("Guess the number!");
+            ui.add_space(10.0);
+            ui.label(format!("Attempt: #{}", self.attempts));
+            
+            ui.horizontal(|ui| {
+                ui.label("Your guess:");
+                ui.text_edit_singleline(&mut self.guess_input);
+            });
+
+            if ui.button("Submit Guess").clicked() {
+                let trimmed = self.guess_input.trim().to_string();
+                if trimmed == "exit" {
+                    std::process::exit(0);
+                }
+
+                if !trimmed.is_empty() && !self.history.contains(&trimmed) {
+                    if self.history.len() >= 8 {
+                        self.history.remove(0);
+                    }
+                    self.history.push(trimmed.clone());
+                }
+
+                match trimmed.parse::<f64>() {
+                    Ok(num) => {
+                        self.attempts += 1;
+                        match num.total_cmp(&self.secret_number) {
+                            Ordering::Less => {
+                                self.message = "Too small!".to_owned();
+                                self.message_color = egui::Color32::RED;
+                            }
+                            Ordering::Greater => {
+                                self.message = "Too big!".to_owned();
+                                self.message_color = egui::Color32::RED;
+                            }
+                            Ordering::Equal => {
+                                self.message = format!("You guessed correctly in {} guesses!", self.attempts);
+                                self.message_color = egui::Color32::LIGHT_GREEN;
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        self.message = "Thats not a number! type in a number.".to_owned();
+                        self.message_color = egui::Color32::GREEN;
+                    }
+                }
+                self.guess_input.clear();
+            }
+
+            ui.separator();
+            ui.colored_label(self.message_color, &self.message);
+
+            if !self.history.is_empty() {
+                ui.separator();
+                ui.label("Recent History (tap to reuse):");
+                for h in self.history.iter().rev() {
+                    if ui.small_button(h).clicked() {
+                        self.guess_input = h.clone();
+                    }
+                }
+            }
+        });
     }
 }
