@@ -39,14 +39,49 @@ impl Default for GuessingGame {
 
 
 impl eframe::App for GuessingGame {
-         fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Tvinger appen til at være stor og nem at læse på mobilskærme
         ctx.set_pixels_per_point(1.5);
 
+        // 1. BUND-PANEL: Klistrer Submit-knappen og historikken helt derned, hvor tommelfingeren er!
+        egui::TopBottomPanel::bottom("ergonomic_controls")
+            .frame(egui::Frame::none().inner_margin(10.0)) // Lidt luft i bunden
+            .show(ctx, |ui| {
+                ui.vertical_centered(|ui| {
+                    // Gør "Submit"-knappen stor og placerer den lige over tastaturet
+                    let submit_clicked = ui.add(
+                        egui::Button::new(egui::RichText::new("Submit Guess").size(22.0))
+                            .min_size(egui::vec2(220.0, 50.0))
+                    ).clicked();
+
+                    // Hvis knappen klikkes (vi håndterer logikken efter inputfeltet er tegnet i central panel)
+                    ctx.data_mut(|d| d.insert_temp(egui::Id::new("submit_clicked"), submit_clicked));
+
+                    // Tidligere gæt som store, klikbare knapper lige under submit
+                    if !self.history.is_empty() {
+                        ui.add_space(15.0);
+                        ui.separator();
+                        ui.add_space(5.0);
+                        ui.label(egui::RichText::new("Seneste gæt (tryk for at genbruge):").size(13.0));
+                        ui.add_space(5.0);
+                        
+                        ui.horizontal_wrapped(|ui| {
+                            for h in self.history.iter().rev() {
+                                if ui.add(egui::Button::new(h).min_size(egui::vec2(55.0, 38.0))).clicked() {
+                                    // Gemmer midlertidigt hvilket historik-element der blev trykket på
+                                    ctx.data_mut(|d| d.insert_temp(egui::Id::new("history_pushed"), h.clone()));
+                                }
+                            }
+                        });
+                    }
+                    ui.add_space(10.0);
+                });
+            });
+
+        // 2. CENTRAL-PANEL: Holder titlen, forsøgene og inputfeltet i den øverste halvdel
         egui::CentralPanel::default().show(ctx, |ui| {
-            // Centrerer alt indhold vandret og lodret på skærmen (Super ergonomisk!)
             ui.vertical_centered(|ui| {
-                ui.add_space(60.0); // Luft i toppen under statusbaren
+                ui.add_space(50.0); // Luft under statusbaren
                 
                 ui.heading("🎯 Guess the number! 🎯");
                 ui.add_space(5.0);
@@ -57,19 +92,32 @@ impl eframe::App for GuessingGame {
                 let text_input_response = ui.add(
                     egui::TextEdit::singleline(&mut self.guess_input)
                         .hint_text("Indtast dit gæt her...")
-                        .font(egui::FontId::proportional(20.0)) // Gør tekstfeltet stort
+                        .font(egui::FontId::proportional(20.0))
                 );
 
-                ui.add_space(15.0);
+                ui.add_space(20.0);
+                ui.separator();
+                ui.add_space(10.0);
 
-                // Gør "Submit"-knappen stor og nem at ramme med tommelfingeren
-                let submit_clicked = ui.add(
-                    egui::Button::new(egui::RichText::new("Submit Guess").size(22.0))
-                        .min_size(egui::vec2(200.0, 50.0))
-                ).clicked();
+                // Feedback-besked (f.eks. "1.95 er for stort!") midt på skærmen
+                ui.label(egui::RichText::new(&self.message).size(18.0).color(self.message_color));
 
-                // Hvis man trykker på knappen ELLER trykker Enter på tastaturet
-                if submit_clicked || (text_input_response.lost_focus() && ctx.input(|i| i.key_pressed(egui::Key::Enter))) {
+                // Hent klik-events fra bund-panelet
+                let mut submit_triggered = ctx.data(|d| d.get_temp::<bool>(egui::Id::new("submit_clicked")).unwrap_or(false));
+                
+                // Hvis der blev trykket på en historik-knap i bunden
+                if let Some(history_val) = ctx.data_mut(|d| d.remove_temp::<String>(egui::Id::new("history_pushed"))) {
+                    self.guess_input = history_val;
+                    text_input_response.request_focus();
+                }
+
+                // Hvis man trykker Enter på tastaturet
+                if text_input_response.lost_focus() && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+                    submit_triggered = true;
+                }
+
+                // Kør spil-logikken hvis der skal submittes
+                if submit_triggered {
                     let trimmed = self.guess_input.trim().to_string();
                     
                     if trimmed == "exit" {
@@ -77,15 +125,12 @@ impl eframe::App for GuessingGame {
                     }
 
                     if !trimmed.is_empty() {
-                        // HISTORIK-FIX: Hvis tallet findes i forvejen, sletter vi det gamle
                         if let Some(index) = self.history.iter().position(|x| x == &trimmed) {
                             self.history.remove(index);
                         }
-                        // Hvis listen er fuld, fjerner vi det ældste
                         if self.history.len() >= 6 {
                             self.history.remove(0);
                         }
-                        // Tilføj det nye gæt i bunden (som vises øverst pga. .rev())
                         self.history.push(trimmed.clone());
                     }
 
@@ -113,35 +158,8 @@ impl eframe::App for GuessingGame {
                         }
                     }
                     
-                    // TASTATUR-FIX: Ryd feltet og tving tastaturet til at blive oppe
                     self.guess_input.clear();
-                    text_input_response.request_focus();
-                }
-
-                ui.add_space(20.0);
-                ui.separator();
-                ui.add_space(10.0);
-
-                // Besked-label (Større tekst)
-                ui.label(egui::RichText::new(&self.message).size(18.0).color(self.message_color));
-
-                // Tidligere gæt som store, klikbare knapper
-                if !self.history.is_empty() {
-                    ui.add_space(20.0);
-                    ui.separator();
-                    ui.add_space(10.0);
-                    ui.label("Seneste gæt (tryk for at genbruge):");
-                    ui.add_space(5.0);
-                    
-                    // Viser dem i rækkefølge, så det nyeste altid er øverst/først
-                    ui.horizontal_wrapped(|ui| {
-                        for h in self.history.iter().rev() {
-                            if ui.add(egui::Button::new(h).min_size(egui::vec2(50.0, 35.0))).clicked() {
-                                self.guess_input = h.clone();
-                                text_input_response.request_focus(); // Hold tastaturet oppe ved klik
-                            }
-                        }
-                    });
+                    text_input_response.request_focus(); // Tving tastaturet til at blive oppe
                 }
             });
         });
