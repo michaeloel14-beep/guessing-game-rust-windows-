@@ -37,8 +37,19 @@ impl Default for GuessingGame {
     }
 }
 
+
 impl eframe::App for GuessingGame {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+      fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Gør alt indhold 40% større (Zoom ind). Standard er 1.0. Juster tallet efter smag!
+        ctx.set_pixels_per_point(1.4);
+
+        // Skaber en tom, usynlig bar i toppen for at skubbe spillet væk fra statusbaren
+        egui::TopBottomPanel::top("status_bar_spacer")
+            .frame(egui::Frame::none()) 
+            .show(ctx, |ui| {
+                ui.add_space(35.0); // Da vi har zoomet ind, behøver dette tal ikke være lige så højt som før
+            });
+
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Guess the number!");
             ui.add_space(10.0);
@@ -102,4 +113,3 @@ impl eframe::App for GuessingGame {
             }
         });
     }
-}
