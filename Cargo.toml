@@ -1,12 +1,12 @@
 [package]
-name = "testing_rust"
+name = "guessing_game"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/main.rs"
 
 [dependencies]
-color-print = "0.3.7"
-dialoguer = {
-    version = "0.12.0",
-    features = ["history"]
-}
-rand = "0.10.3"
+rand = "0.9"
+eframe = { version = "0.31", default-features = false, features = ["glow", "default_fonts", "android-native-activity"] }
