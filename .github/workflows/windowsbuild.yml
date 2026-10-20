@@ -13,8 +13,9 @@ jobs:
       - name: Install cargo-apk
         run: cargo install cargo-apk
 
-      - name: Build APK
+      - name: Install Android Platform 30 & Build APK
         run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-30" "build-tools;30.0.3"
           export ANDROID_HOME=$ANDROID_HOME
           export NDK_HOME=$ANDROID_NDK_LATEST_HOME
           cargo apk build --release --lib
