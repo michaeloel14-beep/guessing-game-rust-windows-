@@ -146,3 +146,4 @@ impl eframe::App for GuessingGame {
             });
         });
     }
+}
