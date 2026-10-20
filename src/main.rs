@@ -39,7 +39,7 @@ impl Default for GuessingGame {
 
 
 impl eframe::App for GuessingGame {
-      fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+         fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Tvinger appen til at være stor og nem at læse på mobilskærme
         ctx.set_pixels_per_point(1.5);
 
@@ -61,7 +61,7 @@ impl eframe::App for GuessingGame {
 
                 ui.add_space(15.0);
 
-                // 2. SUBMIT KNAPPEN (Ligger nu lige under feltet, så den altid er synlig)
+                // 2. SUBMIT KNAPPEN
                 let submit_clicked = ui.add(
                     egui::Button::new(egui::RichText::new("Submit Guess").size(22.0))
                         .min_size(egui::vec2(220.0, 48.0))
@@ -72,33 +72,44 @@ impl eframe::App for GuessingGame {
                 // 3. RESPONS / FEEDBACK BESKED
                 ui.label(egui::RichText::new(&self.message).size(18.0).color(self.message_color));
 
-                // 4. HISTORIK (Rykket herop så den ikke drukner under tastaturet)
+                // 4. HISTORIK (Gemmer ALLE gæt og kan scrolles)
                 let mut history_to_reuse = None;
                 if !self.history.is_empty() {
                     ui.add_space(15.0);
                     ui.separator();
                     ui.add_space(5.0);
-                    ui.label(egui::RichText::new("Seneste gæt (tryk for at genbruge):").size(13.0));
+                    ui.label(egui::RichText::new("Tidligere gæt (tryk for at genbruge):").size(14.0));
                     ui.add_space(5.0);
                     
-                    ui.horizontal_wrapped(|ui| {
-                        for h in self.history.iter().rev() {
-                            if ui.add(egui::Button::new(h).min_size(egui::vec2(55.0, 38.0))).clicked() {
-                                history_to_reuse = Some(h.clone());
-                            }
-                        }
-                    });
+                    // Begrænser højden på historik-området så det ikke rammer tastaturet, og gør det scrollbart
+                    egui::ScrollArea::vertical()
+                        .max_height(140.0)
+                        .id_source("history_scroll")
+                        .show(ui, |ui| {
+                            ui.horizontal_wrapped(|ui| {
+                                // Sætter afstand mellem knapperne
+                                ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
+                                
+                                for h in self.history.iter().rev() {
+                                    // GØR KNAPPERNE STØRRE: min_size er sat til 65x45 pixels og teksten er sat til size 16
+                                    let btn = egui::Button::new(egui::RichText::new(h).size(16.0))
+                                        .min_size(egui::vec2(65.0, 45.0));
+                                        
+                                    if ui.add(btn).clicked() {
+                                        history_to_reuse = Some(h.clone());
+                                    }
+                                }
+                            });
+                        });
                 }
 
                 // --- SPIL-LOGIK OG INPUT-HÅNDTERING ---
                 
-                // Genbrug gammelt gæt hvis der trykkes på en historik-knap
                 if let Some(history_val) = history_to_reuse {
                     self.guess_input = history_val;
                     text_input_response.request_focus();
                 }
 
-                // Check om man trykkede på Submit ELLER trykkede Enter på tastaturet
                 let enter_pressed = text_input_response.lost_focus() && ctx.input(|i| i.key_pressed(egui::Key::Enter));
                 
                 if submit_clicked || enter_pressed {
@@ -109,12 +120,11 @@ impl eframe::App for GuessingGame {
                     }
 
                     if !trimmed.is_empty() {
+                        // Hvis tallet findes i forvejen, rykker vi det stadig frem som det nyeste
                         if let Some(index) = self.history.iter().position(|x| x == &trimmed) {
                             self.history.remove(index);
                         }
-                        if self.history.len() >= 6 {
-                            self.history.remove(0);
-                        }
+                        // INGEN sletning af gamle gæt her – listen vokser bare!
                         self.history.push(trimmed.clone());
                     }
 
@@ -142,7 +152,6 @@ impl eframe::App for GuessingGame {
                         }
                     }
                     
-                    // Nulstil tekst og behold det uafbrudte tastatur-fokus!
                     self.guess_input.clear();
                     text_input_response.request_focus();
                 }
