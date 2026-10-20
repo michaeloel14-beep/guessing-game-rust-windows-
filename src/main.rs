@@ -39,7 +39,7 @@ impl Default for GuessingGame {
 
 
 impl eframe::App for GuessingGame {
-         fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Tvinger appen til at være stor og nem at læse på mobilskærme
         ctx.set_pixels_per_point(1.5);
 
@@ -72,8 +72,10 @@ impl eframe::App for GuessingGame {
                 // 3. RESPONS / FEEDBACK BESKED
                 ui.label(egui::RichText::new(&self.message).size(18.0).color(self.message_color));
 
-                // 4. HISTORIK (Gemmer ALLE gæt og kan scrolles)
+                // 4. HISTORIK (Nu meget længere lodret og med scrollbar!)
                 let mut history_to_reuse = None;
+                let mut clear_history_clicked = false;
+
                 if !self.history.is_empty() {
                     ui.add_space(15.0);
                     ui.separator();
@@ -81,30 +83,43 @@ impl eframe::App for GuessingGame {
                     ui.label(egui::RichText::new("Tidligere gæt (tryk for at genbruge):").size(14.0));
                     ui.add_space(5.0);
                     
-                    // Begrænser højden på historik-området så det ikke rammer tastaturet, og gør det scrollbart
-                    egui::ScrollArea::vertical()
-                        .max_height(140.0)
-                        .id_source("history_scroll")
+                    // Gør rammen lodret meget længere (ændret til 320.0) og tilføjer en svag baggrundsfarve
+                    egui::Frame::none()
+                        .fill(egui::Color32::from_white_alpha(5)) // Gør scroll-området let synligt
+                        .inner_margin(8.0)
                         .show(ui, |ui| {
-                            ui.horizontal_wrapped(|ui| {
-                                // Sætter afstand mellem knapperne
-                                ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
-                                
-                                for h in self.history.iter().rev() {
-                                    // GØR KNAPPERNE STØRRE: min_size er sat til 65x45 pixels og teksten er sat til size 16
-                                    let btn = egui::Button::new(egui::RichText::new(h).size(16.0))
-                                        .min_size(egui::vec2(65.0, 45.0));
+                            egui::ScrollArea::vertical()
+                                .max_height(320.0) // Kæmpe lodret boks til masser af gæt!
+                                .id_source("history_scroll")
+                                .show(ui, |ui| {
+                                    ui.horizontal_wrapped(|ui| {
+                                        ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
                                         
-                                    if ui.add(btn).clicked() {
-                                        history_to_reuse = Some(h.clone());
+                                        for h in self.history.iter().rev() {
+                                            let btn = egui::Button::new(egui::RichText::new(h).size(16.0))
+                                                .min_size(egui::vec2(65.0, 45.0));
+                                                
+                                            if ui.add(btn).clicked() {
+                                                history_to_reuse = Some(h.clone());
+                                            }
+                                        }
+                                    });
+
+                                    // Tilføjer en knap i bunden af listen til at nulstille historikken
+                                    ui.add_space(15.0);
+                                    if ui.button(egui::RichText::new("🗑 Ryd historik-liste").color(egui::Color32::LIGHT_RED)).clicked() {
+                                        clear_history_clicked = true;
                                     }
-                                }
-                            });
+                                });
                         });
                 }
 
                 // --- SPIL-LOGIK OG INPUT-HÅNDTERING ---
                 
+                if clear_history_clicked {
+                    self.history.clear();
+                }
+
                 if let Some(history_val) = history_to_reuse {
                     self.guess_input = history_val;
                     text_input_response.request_focus();
@@ -120,11 +135,9 @@ impl eframe::App for GuessingGame {
                     }
 
                     if !trimmed.is_empty() {
-                        // Hvis tallet findes i forvejen, rykker vi det stadig frem som det nyeste
                         if let Some(index) = self.history.iter().position(|x| x == &trimmed) {
                             self.history.remove(index);
                         }
-                        // INGEN sletning af gamle gæt her – listen vokser bare!
                         self.history.push(trimmed.clone());
                     }
 
