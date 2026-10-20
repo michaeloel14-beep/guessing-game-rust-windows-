@@ -1,8 +1,8 @@
 use eframe::egui;
 use std::cmp::Ordering;
 
-#[cfg_attr(target_os = "android", unsafe(no_mangle))]
-fn android_main(app: eframe::android_activity::AndroidApp) {
+#[cfg_attr(target_os = "android", no_mangle)]
+fn android_main(app: winit::platform::android::activity::AndroidApp) {
     let mut options = eframe::NativeOptions::default();
     options.android_app = Some(app);
     let _ = eframe::run_native(
