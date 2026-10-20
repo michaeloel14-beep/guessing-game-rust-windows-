@@ -12,7 +12,6 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     );
 }
 
-// Allows it to still compile on Windows if needed
 #[allow(dead_code)]
 fn main() {}
 
