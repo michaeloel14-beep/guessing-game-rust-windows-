@@ -39,78 +39,110 @@ impl Default for GuessingGame {
 
 
 impl eframe::App for GuessingGame {
-      fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Gør alt indhold 40% større (Zoom ind). Standard er 1.0. Juster tallet efter smag!
-        ctx.set_pixels_per_point(1.4);
-
-        // Skaber en tom, usynlig bar i toppen for at skubbe spillet væk fra statusbaren
-        egui::TopBottomPanel::top("status_bar_spacer")
-            .frame(egui::Frame::none()) 
-            .show(ctx, |ui| {
-                ui.add_space(35.0); // Da vi har zoomet ind, behøver dette tal ikke være lige så højt som før
-            });
+         fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Tvinger appen til at være stor og nem at læse på mobilskærme
+        ctx.set_pixels_per_point(1.5);
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Guess the number!");
-            ui.add_space(10.0);
-            ui.label(format!("Attempt: #{}", self.attempts));
-            
-            ui.horizontal(|ui| {
-                ui.label("Your guess:");
-                ui.text_edit_singleline(&mut self.guess_input);
-            });
+            // Centrerer alt indhold vandret og lodret på skærmen (Super ergonomisk!)
+            ui.vertical_centered(|ui| {
+                ui.add_space(60.0); // Luft i toppen under statusbaren
+                
+                ui.heading("🎯 Guess the number! 🎯");
+                ui.add_space(5.0);
+                ui.label(egui::RichText::new(format!("Attempt: #{}", self.attempts)).size(16.0));
+                ui.add_space(20.0);
 
-            if ui.button("Submit Guess").clicked() {
-                let trimmed = self.guess_input.trim().to_string();
-                if trimmed == "exit" {
-                    std::process::exit(0);
-                }
+                // Gemmer tekstfeltets respons, så vi kan styre tastaturet
+                let text_input_response = ui.add(
+                    egui::TextEdit::singleline(&mut self.guess_input)
+                        .hint_text("Indtast dit gæt her...")
+                        .font(egui::FontId::proportional(20.0)) // Gør tekstfeltet stort
+                );
 
-                if !trimmed.is_empty() && !self.history.contains(&trimmed) {
-                    if self.history.len() >= 8 {
-                        self.history.remove(0);
+                ui.add_space(15.0);
+
+                // Gør "Submit"-knappen stor og nem at ramme med tommelfingeren
+                let submit_clicked = ui.add(
+                    egui::Button::new(egui::RichText::new("Submit Guess").size(22.0))
+                        .min_size(egui::vec2(200.0, 50.0))
+                ).clicked();
+
+                // Hvis man trykker på knappen ELLER trykker Enter på tastaturet
+                if submit_clicked || (text_input_response.lost_focus() && ctx.input(|i| i.key_pressed(egui::Key::Enter))) {
+                    let trimmed = self.guess_input.trim().to_string();
+                    
+                    if trimmed == "exit" {
+                        std::process::exit(0);
                     }
-                    self.history.push(trimmed.clone());
-                }
 
-                match trimmed.parse::<f64>() {
-                    Ok(num) => {
-                        self.attempts += 1;
-                        match num.total_cmp(&self.secret_number) {
-                            Ordering::Less => {
-                                self.message = "Too small!".to_owned();
-                                self.message_color = egui::Color32::RED;
-                            }
-                            Ordering::Greater => {
-                                self.message = "Too big!".to_owned();
-                                self.message_color = egui::Color32::RED;
-                            }
-                            Ordering::Equal => {
-                                self.message = format!("You guessed correctly in {} guesses!", self.attempts);
-                                self.message_color = egui::Color32::LIGHT_GREEN;
+                    if !trimmed.is_empty() {
+                        // HISTORIK-FIX: Hvis tallet findes i forvejen, sletter vi det gamle
+                        if let Some(index) = self.history.iter().position(|x| x == &trimmed) {
+                            self.history.remove(index);
+                        }
+                        // Hvis listen er fuld, fjerner vi det ældste
+                        if self.history.len() >= 6 {
+                            self.history.remove(0);
+                        }
+                        // Tilføj det nye gæt i bunden (som vises øverst pga. .rev())
+                        self.history.push(trimmed.clone());
+                    }
+
+                    match trimmed.parse::<f64>() {
+                        Ok(num) => {
+                            self.attempts += 1;
+                            match num.total_cmp(&self.secret_number) {
+                                Ordering::Less => {
+                                    self.message = format!("{num} er for lille!");
+                                    self.message_color = egui::Color32::from_rgb(255, 100, 100);
+                                }
+                                Ordering::Greater => {
+                                    self.message = format!("{num} er for stort!");
+                                    self.message_color = egui::Color32::from_rgb(255, 100, 100);
+                                }
+                                Ordering::Equal => {
+                                    self.message = format!("🎉 Korrekt! Du brugte {} gæt!", self.attempts);
+                                    self.message_color = egui::Color32::LIGHT_GREEN;
+                                }
                             }
                         }
+                        Err(_) => {
+                            self.message = "Det er ikke et tal! Prøv igen.".to_owned();
+                            self.message_color = egui::Color32::YELLOW;
+                        }
                     }
-                    Err(_) => {
-                        self.message = "Thats not a number! type in a number.".to_owned();
-                        self.message_color = egui::Color32::GREEN;
-                    }
+                    
+                    // TASTATUR-FIX: Ryd feltet og tving tastaturet til at blive oppe
+                    self.guess_input.clear();
+                    text_input_response.request_focus();
                 }
-                self.guess_input.clear();
-            }
 
-            ui.separator();
-            ui.colored_label(self.message_color, &self.message);
-
-            if !self.history.is_empty() {
+                ui.add_space(20.0);
                 ui.separator();
-                ui.label("Recent History (tap to reuse):");
-                for h in self.history.iter().rev() {
-                    if ui.small_button(h).clicked() {
-                        self.guess_input = h.clone();
-                    }
+                ui.add_space(10.0);
+
+                // Besked-label (Større tekst)
+                ui.label(egui::RichText::new(&self.message).size(18.0).color(self.message_color));
+
+                // Tidligere gæt som store, klikbare knapper
+                if !self.history.is_empty() {
+                    ui.add_space(20.0);
+                    ui.separator();
+                    ui.add_space(10.0);
+                    ui.label("Seneste gæt (tryk for at genbruge):");
+                    ui.add_space(5.0);
+                    
+                    // Viser dem i rækkefølge, så det nyeste altid er øverst/først
+                    ui.horizontal_wrapped(|ui| {
+                        for h in self.history.iter().rev() {
+                            if ui.add(egui::Button::new(h).min_size(egui::vec2(50.0, 35.0))).clicked() {
+                                self.guess_input = h.clone();
+                                text_input_response.request_focus(); // Hold tastaturet oppe ved klik
+                            }
+                        }
+                    });
                 }
-            }
+            });
         });
     }
-}
